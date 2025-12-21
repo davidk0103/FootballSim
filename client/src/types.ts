@@ -1,5 +1,8 @@
 export type OffensePosition = "QB" | "WR1" | "WR2" | "WR3" | "TE" | "RB";
 export type DefensePosition = "CB1" | "CB2" | "S1" | "S2" | "N" | "LB1" | "LB2";
+export type Coverage = "COVER_1" | "COVER_2" | "COVER_3" | "QUARTERS";
+export type PlayResult = "COMPLETE" | "INCOMPLETE" | "INTERCEPTION" | "SACK";
+
 
 export type Team = "O" | "D";
 
@@ -34,3 +37,4 @@ export interface Play {
   offense: Player[];
   routes: RouteAssignment[];
 }
+

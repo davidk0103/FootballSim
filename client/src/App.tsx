@@ -1,7 +1,126 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import CanvasField from "./components/CanvasField";
-import type { Formation, Player } from "./types";
 import "./App.css";
+import type { Formation, Player, RouteAssignment, RouteType, OffensePosition, Coverage } from "./types";
+
+
+const ROUTES: RouteType[] = [
+  "HITCH", "SLANT", "OUT", "CORNER", "POST", "GO", "DIG", "CURL", "FLAT", "STICK",
+];
+
+type TargetPosition = Exclude<OffensePosition, "QB">;
+
+function rand(min: number, max: number) {
+  return min + Math.random() * (max - min);
+}
+
+function jitter(x: number, amt = 0.03) {
+  return Math.max(0, Math.min(1, x + rand(-amt, amt)));
+}
+
+function getO(offense: Player[], id: OffensePosition | string) {
+  return offense.find((p) => p.team === "O" && p.id === id);
+}
+
+function eligible(offense: Player[]) {
+  return offense.filter((p) => p.team === "O" && p.id !== "QB");
+}
+
+function strongSide(offense: Player[]) {
+  const left = eligible(offense).filter((p) => p.x < 0.5).length;
+  const right = eligible(offense).filter((p) => p.x >= 0.5).length;
+  return right >= left ? "RIGHT" : "LEFT";
+}
+
+function findSlotLike(offense: Player[]) {
+  const wr2 = getO(offense, "WR2");
+  if (wr2) return wr2;
+
+  const side = strongSide(offense);
+  const candidates = eligible(offense).filter((p) => (side === "RIGHT" ? p.x >= 0.5 : p.x < 0.5));
+
+  let best = candidates[0];
+  let bestDist = best ? Math.abs(best.x - 0.5) : 999;
+  for (const p of candidates) {
+    const d = Math.abs(p.x - 0.5);
+    if (d < bestDist) {
+      best = p;
+      bestDist = d;
+    }
+  }
+  return best ?? wr2 ?? getO(offense, "TE") ?? getO(offense, "WR1")!;
+}
+
+function findTE(offense: Player[]) {
+  return getO(offense, "TE");
+}
+
+function generateDefense(cov: Coverage, offense: Player[]): Player[] {
+  const losY = 0.2;
+
+  const X = getO(offense, "WR1");
+  const Z = getO(offense, "WR3");
+  const slot = findSlotLike(offense);
+  const te = findTE(offense);
+  const rb = getO(offense, "RB");
+
+  const cb1x = X ? X.x : 0.16;
+  const cb2x = Z ? Z.x : 0.84;
+  const nickelX = slot ? slot.x * 0.85 + 0.5 * 0.15 : 0.62;
+  const lbToTeX = te ? te.x : 0.52;
+  const lbToRbX = rb ? rb.x * 0.7 + 0.5 * 0.3 : 0.48;
+
+  const cornerY = losY + rand(0.04, 0.15);
+  const lbY = losY + rand(0.11, 0.16);
+  const safetyY = losY + rand(0.34, 0.42);
+
+  const base: Player[] = [
+    { id: "CB1", team: "D", x: jitter(cb1x, 0.02), y: jitter(cornerY, 0.01) },
+    { id: "CB2", team: "D", x: jitter(cb2x, 0.02), y: jitter(cornerY, 0.01) },
+    { id: "N", team: "D", x: jitter(nickelX, 0.02), y: jitter(cornerY + 0.02, 0.01) },
+    { id: "LB1", team: "D", x: jitter(lbToTeX, 0.03), y: jitter(lbY, 0.02) },
+    { id: "LB2", team: "D", x: jitter(lbToRbX, 0.03), y: jitter(lbY, 0.02) },
+    { id: "S1", team: "D", x: 0.40, y: safetyY },
+    { id: "S2", team: "D", x: 0.60, y: safetyY },
+  ];
+
+  const S1 = base.find((p) => p.id === "S1")!;
+  const S2 = base.find((p) => p.id === "S2")!;
+
+  if (cov === "COVER_1") {
+    S1.x = 0.50; S1.y = losY + 0.42;
+    S2.x = jitter(0.55, 0.05); S2.y = losY + 0.18;
+  } else if (cov === "COVER_2") {
+    S1.x = 0.35; S1.y = losY + 0.40;
+    S2.x = 0.65; S2.y = losY + 0.40;
+  } else if (cov === "COVER_3") {
+    S1.x = 0.50; S1.y = losY + 0.42;
+    S2.x = jitter(0.60, 0.07); S2.y = losY + 0.20;
+  } else if (cov === "QUARTERS") {
+    S1.x = 0.32; S1.y = losY + 0.38;
+    S2.x = 0.68; S2.y = losY + 0.38;
+  }
+
+  return base.map((d) => ({ ...d, x: jitter(d.x, 0.01), y: jitter(d.y, 0.01) }));
+}
+
+function defaultRoutesForFormation(): RouteAssignment[] {
+  // MVP defaults; you can tweak anytime
+  return [
+    { receiverId: "WR1", route: "GO" },
+    { receiverId: "WR2", route: "OUT" },
+    { receiverId: "WR3", route: "POST" },
+    { receiverId: "TE", route: "HITCH" },
+    { receiverId: "RB", route: "FLAT" },
+  ];
+}
+
+function eligibleReceivers(offense: Player[]): OffensePosition[] {
+  return offense
+    .map((p) => p.id)
+    .filter((id): id is OffensePosition => id !== "QB");
+}
+
 
 function offenseForFormation(f: Formation): Player[] {
   // normalized coords in [0,1]
@@ -42,10 +161,20 @@ function offenseForFormation(f: Formation): Player[] {
 export default function App() {
   const [formation, setFormation] = useState<Formation>("TRIPS_RIGHT");
   const [dimensions, setDimensions] = useState({ width: 900, height: 520 });
+  const [routes, setRoutes] = useState<RouteAssignment[]>(defaultRoutesForFormation());
+  const [canvasKey, setCanvasKey] = useState(0);
   const fieldRef = useRef<HTMLDivElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [target, setTarget] = useState<TargetPosition>("WR3");
+  const [coverage, setCoverage] = useState<Coverage>("COVER_2");
+  const [defense, setDefense] = useState<Player[]>([]);
+  const [playResult, setPlayResult] = useState<string | null>(null);
+
 
   const offense = useMemo(() => offenseForFormation(formation), [formation]);
 
+  // 1) resize observer
   useEffect(() => {
     const node = fieldRef.current;
     if (!node) return;
@@ -71,10 +200,29 @@ export default function App() {
     };
   }, []);
 
+  // 2) regenerate defense when formation/coverage changes (offense derived from formation)
+  useEffect(() => {
+    setDefense(generateDefense(coverage, offense));
+    setPlayResult(null);
+  }, [coverage, offense]);
+
   return (
     <div className="app">
       <div className="field-shell" ref={fieldRef}>
-        <CanvasField offense={offense} width={dimensions.width} height={dimensions.height} />
+        <CanvasField
+          key={canvasKey}
+          offense={offense}
+          routes={routes}
+          defense={defense}
+          coverage={coverage}
+          width={dimensions.width}
+          height={dimensions.height}
+          isPlaying={isPlaying}
+          speed={speed}
+          target={target}
+          onDone={() => setIsPlaying(false)}
+          onResult={(r) => setPlayResult(r)}
+        />
       </div>
 
       <div className="controls">
@@ -90,7 +238,100 @@ export default function App() {
             <option value="BUNCH_LEFT">Bunch Left</option>
           </select>
         </div>
-        <span className="hint">Visualizer above; choose a formation to update it.</span>
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Routes</div>
+
+          {eligibleReceivers(offense).map((rid) => {
+            const current = routes.find((r) => r.receiverId === rid)?.route ?? "HITCH";
+
+            return (
+              <div key={rid} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                <div style={{ width: 36 }}>{rid}</div>
+                <select
+                  value={current}
+                  onChange={(e) => {
+                    const next = e.target.value as RouteType;
+                    setRoutes((prev) => {
+                      const copy = [...prev];
+                      const idx = copy.findIndex((r) => r.receiverId === rid);
+                      if (idx >= 0) copy[idx] = { receiverId: rid, route: next };
+                      else copy.push({ receiverId: rid, route: next });
+                      return copy;
+                    });
+                  }}
+                  style={{ padding: 8, width: 160 }}
+                >
+                  {ROUTES.map((rt) => (
+                    <option key={rt} value={rt}>
+                      {rt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => setIsPlaying((p) => !p)} style={{ padding: "8px 12px" }}>
+            {isPlaying ? "Pause" : "Play"}
+          </button>
+
+          <button
+            onClick={() => {
+              setIsPlaying(false);
+              setCanvasKey((k) => k + 1); // force remount to reset
+            }}
+            style={{ padding: "8px 12px" }}
+          >
+            Reset
+          </button>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            Speed
+            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+              <option value={0.5}>0.5x</option>
+              <option value={1}>1x</option>
+              <option value={2}>2x</option>
+            </select>
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            Target
+            <select value={target} onChange={(e) => setTarget(e.target.value as TargetPosition)}>
+              <option value="WR1">WR1</option>
+              <option value="WR2">WR2</option>
+              <option value="WR3">WR3</option>
+              <option value="TE">TE</option>
+              <option value="RB">RB</option>
+            </select>
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            Coverage
+            <select value={coverage} onChange={(e) => setCoverage(e.target.value as Coverage)}>
+              <option value="COVER_1">Cover 1</option>
+              <option value="COVER_2">Cover 2</option>
+              <option value="COVER_3">Cover 3</option>
+              <option value="QUARTERS">Quarters</option>
+            </select>
+          </label>
+
+          <button
+            onClick={() => {
+              setDefense(generateDefense(coverage, offense));
+              setPlayResult(null);
+            }}
+            style={{ padding: "8px 12px" }}
+          >
+            New Defense
+          </button>
+        </div>
+        <span className="hint">Visualizer above; pick a formation/routes and hit Play.</span>
+        {playResult && (
+          <div style={{ marginTop: 12, fontWeight: 700 }}>
+            Result: {playResult}
+          </div>
+        )}
       </div>
     </div>
   );
