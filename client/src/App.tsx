@@ -101,6 +101,15 @@ function generateDefense(cov: Coverage, offense: Player[]): Player[] {
     S2.x = 0.68; S2.y = losY + 0.38;
   }
 
+  const lb1 = base.find((p) => p.id === "LB1");
+  const lb2 = base.find((p) => p.id === "LB2");
+  if (lb1 && lb2 && lb2.x <= lb1.x) {
+    // keep LB2 aligned to the right of LB1 with a small buffer
+    const mid = (lb1.x + lb2.x) / 2;
+    lb1.x = Math.max(0, mid - 0.025);
+    lb2.x = Math.min(1, mid + 0.025);
+  }
+
   return base.map((d) => ({ ...d, x: jitter(d.x, 0.01), y: jitter(d.y, 0.01) }));
 }
 
@@ -170,9 +179,14 @@ export default function App() {
   const [coverage, setCoverage] = useState<Coverage>("COVER_2");
   const [defense, setDefense] = useState<Player[]>([]);
   const [playResult, setPlayResult] = useState<string | null>(null);
+  const playFinishedRef = useRef(false);
 
 
   const offense = useMemo(() => offenseForFormation(formation), [formation]);
+
+  useEffect(() => {
+    if (isPlaying) playFinishedRef.current = false;
+  }, [isPlaying]);
 
   // 1) resize observer
   useEffect(() => {
@@ -220,7 +234,12 @@ export default function App() {
           isPlaying={isPlaying}
           speed={speed}
           target={target}
-          onDone={() => setIsPlaying(false)}
+          onDone={() => {
+            if (playFinishedRef.current) return;
+            playFinishedRef.current = true;
+            setIsPlaying(false);
+            setCanvasKey((k) => k + 1); // force remount to reset defense
+          }}
           onResult={(r) => setPlayResult(r)}
         />
       </div>

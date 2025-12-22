@@ -210,6 +210,10 @@ export default function CanvasField({
   const lastTsRef = useRef<number | null>(null);
   const defenseStateRef = useRef<Player[]>([]);
   const defenseInitialRef = useRef<Player[]>([]);
+  const isPlayingRef = useRef(isPlaying);
+  const speedRef = useRef(speed);
+  const onDoneRef = useRef(onDone);
+  const onResultRef = useRef(onResult);
 
   const offenseColor = useMemo(() => "#1f2937", []); // dark gray
   const alignedDefense = useMemo(() => alignDefense(defense, offense), [defense, offense]);
@@ -219,6 +223,22 @@ export default function CanvasField({
     defenseStateRef.current = alignedDefense.map((d) => ({ ...d }));
     defenseInitialRef.current = defense.map((d) => ({ ...d }));
   }, [alignedDefense, defense]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
+
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
+  useEffect(() => {
+    onResultRef.current = onResult;
+  }, [onResult]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -547,11 +567,11 @@ export default function CanvasField({
       const dt = (ts - lastTsRef.current) / 1000;
       lastTsRef.current = ts;
 
-      if (isPlaying) {
-        simTimeRef.current += dt * speed;
+      if (isPlayingRef.current) {
+        simTimeRef.current += dt * speedRef.current;
         if (simTimeRef.current > tEnd) {
           simTimeRef.current = tEnd;
-          onDone?.();
+          onDoneRef.current?.();
         }
       }
 
@@ -568,7 +588,7 @@ export default function CanvasField({
       rafRef.current = null;
       lastTsRef.current = null;
     };
-  }, [width, height, offense, routes, defense, coverage, isPlaying, speed, target, tThrow, onResult, onDone]);
+  }, [width, height, offense, routes, defense, coverage, target, tThrow]);
 
   return <canvas ref={canvasRef} />;
 }
