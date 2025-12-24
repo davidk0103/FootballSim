@@ -93,16 +93,22 @@ function alignDefense(defense: Player[], offense: Player[]): Player[] {
   return next;
 }
 
-function zoneHomeFor(id: string, coverage: Coverage, losY: number, initial?: Player): Pt {
+function zoneHomeFor(
+  id: string,
+  coverage: Coverage,
+  losY: number,
+  nickelLeft: boolean,
+  initial?: Player
+): Pt {
   if (coverage === "COVER_2") {
     const map: Record<string, Pt> = {
-      CB1: { x: 0.14, y: losY + 0.26 }, // wider squat/flat
-      CB2: { x: 0.86, y: losY + 0.26 },
-      N: { x: 0.60, y: losY + 0.22 }, // hook/curl
-      LB1: { x: 0.45, y: losY + 0.24 },
-      LB2: { x: 0.55, y: losY + 0.24 },
-      S1: { x: 0.35, y: losY + 0.46 }, // deep half
-      S2: { x: 0.65, y: losY + 0.46 },
+      CB1: { x: 0.15, y: losY + 0.24 }, // flat
+      CB2: { x: 0.85, y: losY + 0.24 },
+      N: { x: nickelLeft ? 0.35 : 0.65, y: losY + 0.26 }, // curl/flat to slot side
+      LB1: { x: 0.46, y: losY + 0.30 }, // hook
+      LB2: { x: 0.54, y: losY + 0.30 },
+      S1: { x: 0.32, y: losY + 0.52 }, // deep half
+      S2: { x: 0.68, y: losY + 0.52 },
     };
     const baseY = map[id]?.y ?? losY + 0.28;
     const y = initial ? initial.y * 0.6 + baseY * 0.4 : baseY;
@@ -110,27 +116,39 @@ function zoneHomeFor(id: string, coverage: Coverage, losY: number, initial?: Pla
   }
   if (coverage === "COVER_3") {
     const map: Record<string, Pt> = {
-      CB1: { x: 0.16, y: losY + 0.42 }, // deep third, keep outside leverage
-      CB2: { x: 0.84, y: losY + 0.42 },
-      N: { x: 0.60, y: losY + 0.26 }, // curl/flat
-      LB1: { x: 0.46, y: losY + 0.24 }, // hook
-      LB2: { x: 0.54, y: losY + 0.24 },
-      S1: { x: 0.50, y: losY + 0.46 }, // deep middle
-      S2: { x: 0.62, y: losY + 0.26 }, // curl/flat / robber-ish
+      CB1: { x: 0.16, y: losY + 0.52 }, // deep left third
+      CB2: { x: 0.84, y: losY + 0.52 }, // deep right third
+      S1: { x: 0.50, y: losY + 0.56 }, // deep middle third (FS)
+      N: { x: nickelLeft ? 0.32 : 0.68, y: losY + 0.28 }, // curl/flat to passing strength
+      S2: { x: nickelLeft ? 0.70 : 0.30, y: losY + 0.28 }, // curl/flat away from strength
+      LB1: { x: 0.44, y: losY + 0.32 }, // hook/curl
+      LB2: { x: 0.56, y: losY + 0.32 },
     };
+    // Keep S2 opposite the nickel and on the weak side of the hooks
+    const lb1x = map.LB1?.x ?? 0.44;
+    const lb2x = map.LB2?.x ?? 0.56;
+    if (map.S2) {
+      if (nickelLeft) {
+        // Nickel left => S2 weak/right; keep to the right of LB2
+        map.S2.x = clamp01(Math.max(map.S2.x, lb2x + 0.10));
+      } else {
+        // Nickel right => S2 weak/left; keep to the left of LB1
+        map.S2.x = clamp01(Math.min(map.S2.x, lb1x - 0.10));
+      }
+    }
     const baseY = map[id]?.y ?? losY + 0.3;
     const y = initial ? initial.y * 0.6 + baseY * 0.4 : baseY;
     return map[id] ? { x: map[id].x, y } : { x: 0.5, y };
   }
   if (coverage === "QUARTERS") {
     const map: Record<string, Pt> = {
-      CB1: { x: 0.20, y: losY + 0.40 },
-      CB2: { x: 0.80, y: losY + 0.40 },
-      N: { x: 0.60, y: losY + 0.28 },
-      LB1: { x: 0.46, y: losY + 0.26 },
-      LB2: { x: 0.54, y: losY + 0.26 },
-      S1: { x: 0.36, y: losY + 0.44 },
-      S2: { x: 0.64, y: losY + 0.44 },
+      CB1: { x: 0.18, y: losY + 0.52 }, // deep quarter
+      CB2: { x: 0.82, y: losY + 0.52 }, // deep quarter
+      S1: { x: 0.38, y: losY + 0.56 }, // deep quarter
+      S2: { x: 0.62, y: losY + 0.56 }, // deep quarter
+      N: { x: nickelLeft ? 0.32 : 0.68, y: losY + 0.26 }, // flat/force to strength
+      LB1: { x: 0.46, y: losY + 0.32 }, // hook/curl
+      LB2: { x: 0.54, y: losY + 0.32 }, // hook/curl
     };
     const baseY = map[id]?.y ?? losY + 0.32;
     const y = initial ? initial.y * 0.6 + baseY * 0.4 : baseY;
@@ -138,13 +156,13 @@ function zoneHomeFor(id: string, coverage: Coverage, losY: number, initial?: Pla
   }
   // default / Cover 1 man: shallow homes
   const map: Record<string, Pt> = {
-    CB1: { x: 0.2, y: losY + 0.20 },
-    CB2: { x: 0.8, y: losY + 0.20 },
-    N: { x: 0.6, y: losY + 0.20 },
-    LB1: { x: 0.46, y: losY + 0.22 },
-    LB2: { x: 0.54, y: losY + 0.22 },
-    S1: { x: 0.50, y: losY + 0.46 },
-    S2: { x: 0.58, y: losY + 0.20 },
+    CB1: { x: 0.18, y: losY + 0.20 },
+    CB2: { x: 0.82, y: losY + 0.20 },
+    N: { x: nickelLeft ? 0.40 : 0.60, y: losY + 0.22 },
+    LB1: { x: 0.46, y: losY + 0.24 },
+    LB2: { x: 0.54, y: losY + 0.24 },
+    S1: { x: 0.50, y: losY + 0.52 }, // deep middle FS
+    S2: { x: 0.60, y: losY + 0.26 }, // down safety
   };
   const baseY = map[id]?.y ?? losY + 0.28;
   const y = initial ? initial.y * 0.6 + baseY * 0.4 : baseY;
@@ -214,6 +232,8 @@ export default function CanvasField({
   const speedRef = useRef(speed);
   const onDoneRef = useRef(onDone);
   const onResultRef = useRef(onResult);
+  const nickelLeftRef = useRef(false);
+  const manLeverageRef = useRef<Record<string, number>>({});
 
   const offenseColor = useMemo(() => "#1f2937", []); // dark gray
   const alignedDefense = useMemo(() => alignDefense(defense, offense), [defense, offense]);
@@ -239,6 +259,12 @@ export default function CanvasField({
   useEffect(() => {
     onResultRef.current = onResult;
   }, [onResult]);
+
+  useEffect(() => {
+    const wr2 = offense.find((p) => p.id === "WR2");
+    nickelLeftRef.current = !!(wr2 && wr2.x < 0.5);
+    manLeverageRef.current = {}; // reset leverage memory when offense changes
+  }, [offense]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -307,6 +333,8 @@ export default function CanvasField({
       // ---------- Precompute moving positions ----------
       const offenseNow: Player[] = offense.map((p) => ({ ...p }));
       const defenseNow: Player[] = defenseStateRef.current;
+      const receiverDir: Record<string, Pt> = {};
+      const allowMotion = isPlayingRef.current;
 
       // Pre-snap mirror CB/Star to WR splits
       if (simT <= tSnap) {
@@ -329,6 +357,11 @@ export default function CanvasField({
 
         const absPts = buildAbsoluteRoutePoints(receiver, ra.route);
         const pos = positionAlongPolyline(absPts, wrSpeed * simT);
+        const future = positionAlongPolyline(absPts, wrSpeed * Math.max(simT + 0.10, simT)); // peek ahead
+        receiverDir[ra.receiverId] = {
+          x: future.x - pos.x,
+          y: future.y - pos.y,
+        };
 
         const idx = offenseNow.findIndex((p) => p.id === ra.receiverId);
         if (idx >= 0) {
@@ -346,46 +379,169 @@ export default function CanvasField({
       }
 
       // ---------- Move defense (man/zone MVP) ----------
-      const speedPerSecond: Record<string, number> = {
-        CB1: 0.26,
-        CB2: 0.26,
-        N: 0.24,
-        S1: 0.22,
-        S2: 0.22,
-        LB1: 0.20,
-        LB2: 0.20,
-      };
-      const baseSpeed = 0.20;
-      const assign: Record<string, string | undefined> = {
-        CB1: "WR1",
-        CB2: "WR3",
-        N: "WR2",
-        LB1: "TE",
-        LB2: "RB",
-      };
-
-      // clamp frame delta to avoid big jumps if tab was inactive
-      const frameDt = Math.min(dt || 0.016, 0.05); // seconds
-      const reactionDelay = 0.2;
-
-      for (let i = 0; i < defenseNow.length; i++) {
-        const d = defenseNow[i];
-        const cur: Pt = { x: d.x, y: d.y };
-        const isCorner = d.id === "CB1" || d.id === "CB2";
-        const maxDxCorner = 0.0035; // limit lateral slide per frame for corners
-
-        if (simT < reactionDelay) continue;
-
+      if (allowMotion) {
+        const speedPerSecond: Record<string, number> = {
+          CB1: 0.26,
+          CB2: 0.26,
+          N: 0.26,
+          S1: 0.22,
+          S2: 0.22,
+          LB1: 0.20,
+          LB2: 0.20,
+        };
+        const baseSpeed = 0.20;
+        const assign: Record<string, string | undefined> = {
+          CB1: "WR1",
+          CB2: "WR3",
+          N: "WR2",
+          LB1: "TE",
+          LB2: "RB",
+        };
         if (coverage === "COVER_1") {
-          const rid = assign[d.id];
-          const wr = rid ? offenseNow.find((p) => p.id === rid) : undefined;
-          if (wr) {
+          const lb1 = defenseNow.find((d) => d.id === "LB1");
+          const lb2 = defenseNow.find((d) => d.id === "LB2");
+          const te = offenseNow.find((p) => p.id === "TE");
+          const rb = offenseNow.find((p) => p.id === "RB");
+          const distTo = (a?: Player, b?: Player) => (a && b ? dist({ x: a.x, y: a.y }, { x: b.x, y: b.y }) : Infinity);
+          if (lb1 && lb2 && te && rb) {
+            const combo1 = distTo(lb1, te) + distTo(lb2, rb);
+            const combo2 = distTo(lb1, rb) + distTo(lb2, te);
+            if (combo2 < combo1) {
+              assign.LB1 = "RB";
+              assign.LB2 = "TE";
+            } else {
+              assign.LB1 = "TE";
+              assign.LB2 = "RB";
+            }
+          } else if (te && (lb1 || lb2)) {
+            if (distTo(lb1, te) <= distTo(lb2, te)) {
+              assign.LB1 = "TE";
+              assign.LB2 = undefined;
+            } else {
+              assign.LB1 = undefined;
+              assign.LB2 = "TE";
+            }
+          } else if (rb && (lb1 || lb2)) {
+            if (distTo(lb1, rb) <= distTo(lb2, rb)) {
+              assign.LB1 = "RB";
+              assign.LB2 = undefined;
+            } else {
+              assign.LB1 = undefined;
+              assign.LB2 = "RB";
+            }
+          }
+        }
+
+        // clamp frame delta to avoid big jumps if tab was inactive
+        const frameDt = Math.min(dt || 0.016, 0.05); // seconds
+        const reactionDelay = 0.2;
+
+        for (let i = 0; i < defenseNow.length; i++) {
+          const d = defenseNow[i];
+          const cur: Pt = { x: d.x, y: d.y };
+          const isCorner = d.id === "CB1" || d.id === "CB2";
+          const maxDxCorner = 0.0035; // limit lateral slide per frame for corners
+          const initial = defenseInitialRef.current.find((p) => p.id === d.id);
+
+          if (simT < reactionDelay) continue;
+
+          if (coverage === "COVER_1") {
+            const rid = assign[d.id];
+            const wr = rid ? offenseNow.find((p) => p.id === rid) : undefined;
+            if (wr) {
+              const speed = speedPerSecond[d.id] ?? baseSpeed;
+              const step = speed * frameDt * (d.id === "N" ? 0.78 : 0.82); // nickel trails slightly but with CB speed
+              const prevLev = manLeverageRef.current[rid] ?? 0;
+              // default leverage: outside for corners/LBs, inside for nickel (align to inside shoulder)
+              let desiredLev = wr.x < 0.5 ? -0.02 : 0.02;
+              if (d.id === "N") {
+                const inside = wr.x < 0.5 ? 0.025 : -0.025; // inside shade
+                const dir = receiverDir[rid] ?? { x: 0, y: 0 };
+                const threshold = 0.0025;
+                if (dir.x < -threshold) desiredLev = inside; // WR breaking left -> stay to his right/inside
+                else if (dir.x > threshold) desiredLev = -inside; // WR breaking right -> stay to his left/inside
+                else desiredLev = inside;
+              }
+              const leverageOffset = prevLev * 0.6 + desiredLev * 0.4; // smooth to avoid twitch, but react quicker
+              manLeverageRef.current[rid] = leverageOffset;
+              const targetX = Math.max(0, Math.min(1, wr.x + leverageOffset));
+              const desired = { x: targetX, y: wr.y };
+              // lag pursuit to avoid beating the break
+              const mix = d.id === "N" ? 0.55 : 0.65;
+              const lagged = {
+                x: cur.x * (1 - mix) + desired.x * mix,
+                y: cur.y * (1 - mix) + desired.y * mix,
+              };
+              // do not overrun vertically past the receiver
+              const leadLimitY = wr.y + 0.01;
+              if (lagged.y > leadLimitY) lagged.y = leadLimitY;
+              const nxt = moveToward(cur, lagged, step);
+              // keep corners from snapping inside too hard
+              if (isCorner) {
+                defenseNow[i].x = Math.max(cur.x - maxDxCorner, Math.min(cur.x + maxDxCorner, nxt.x));
+                defenseNow[i].y = nxt.y;
+              } else {
+                defenseNow[i].x = nxt.x;
+                defenseNow[i].y = nxt.y;
+              }
+            } else if (d.id === "S1" || d.id === "S2") {
+              // free players: drop/robber toward their cover 1 landmarks and threats
+              const home = zoneHomeFor(d.id, "COVER_1", losY, nickelLeftRef.current, initial);
+              const speed = speedPerSecond[d.id] ?? baseSpeed;
+              const step = speed * frameDt;
+              let targetPt = home;
+              if (d.id === "S2") {
+                let bestWr: Player | null = null;
+                let bestD = 999;
+                for (const o of offenseNow) {
+                  if (o.id === "QB") continue;
+                  const dd = dist({ x: o.x, y: o.y }, home);
+                  if (dd < bestD) {
+                    bestD = dd;
+                    bestWr = o;
+                  }
+                }
+                const threat = bestWr ? { x: bestWr.x, y: bestWr.y } : home;
+                targetPt = {
+                  x: home.x * 0.7 + threat.x * 0.3,
+                  y: home.y * 0.7 + threat.y * 0.3,
+                };
+              }
+              const nxt = moveToward(cur, targetPt, step);
+              defenseNow[i].x = nxt.x;
+              defenseNow[i].y = nxt.y;
+            }
+          } else {
+            // zone: base home from coverage landmarks blended with initial depth
+            let home = zoneHomeFor(d.id, coverage, losY, nickelLeftRef.current, initial);
+            // keep corners on their aligned pre-snap x for flat/deep leverage
+            if (isCorner && initial) {
+              home = { ...home, x: initial.x };
+            }
             const speed = speedPerSecond[d.id] ?? baseSpeed;
+
+            // closest receiver (non-QB)
+            let bestWr: Player | null = null;
+            let bestD = 999;
+            for (const o of offenseNow) {
+              if (o.id === "QB") continue;
+              const dd = dist({ x: o.x, y: o.y }, home);
+              if (dd < bestD) {
+                bestD = dd;
+                bestWr = o;
+              }
+            }
+
+            const threat = bestWr ? { x: bestWr.x, y: bestWr.y } : home;
+            const weightHome = isCorner ? 0.95 : 0.8;
+            const weightThreat = 1 - weightHome;
+            const targetPt: Pt = {
+              x: home.x * weightHome + threat.x * weightThreat,
+              y: home.y * weightHome + threat.y * weightThreat,
+            };
+
             const step = speed * frameDt;
-            const leverageOffset = wr.x < 0.5 ? -0.03 : 0.03; // outside leverage
-            const targetX = Math.max(0, Math.min(1, wr.x + leverageOffset));
-            const nxt = moveToward(cur, { x: targetX, y: wr.y }, step);
-            // keep corners from snapping inside too hard
+            const nxt = moveToward(cur, targetPt, step);
             if (isCorner) {
               defenseNow[i].x = Math.max(cur.x - maxDxCorner, Math.min(cur.x + maxDxCorner, nxt.x));
               defenseNow[i].y = nxt.y;
@@ -393,45 +549,6 @@ export default function CanvasField({
               defenseNow[i].x = nxt.x;
               defenseNow[i].y = nxt.y;
             }
-          }
-        } else {
-          // zone: base home from coverage landmarks blended with initial depth
-          const initial = defenseInitialRef.current.find((p) => p.id === d.id);
-          let home = zoneHomeFor(d.id, coverage, losY, initial);
-          // keep corners on their aligned pre-snap x for flat/deep leverage
-          if (isCorner && initial) {
-            home = { ...home, x: initial.x };
-          }
-          const speed = speedPerSecond[d.id] ?? baseSpeed;
-
-          // closest receiver (non-QB)
-          let bestWr: Player | null = null;
-          let bestD = 999;
-          for (const o of offenseNow) {
-            if (o.id === "QB") continue;
-            const dd = dist({ x: o.x, y: o.y }, home);
-            if (dd < bestD) {
-              bestD = dd;
-              bestWr = o;
-            }
-          }
-
-          const threat = bestWr ? { x: bestWr.x, y: bestWr.y } : home;
-          const weightHome = isCorner ? 0.95 : 0.8;
-          const weightThreat = 1 - weightHome;
-          const targetPt: Pt = {
-            x: home.x * weightHome + threat.x * weightThreat,
-            y: home.y * weightHome + threat.y * weightThreat,
-          };
-
-          const step = speed * frameDt;
-          const nxt = moveToward(cur, targetPt, step);
-          if (isCorner) {
-            defenseNow[i].x = Math.max(cur.x - maxDxCorner, Math.min(cur.x + maxDxCorner, nxt.x));
-            defenseNow[i].y = nxt.y;
-          } else {
-            defenseNow[i].x = nxt.x;
-            defenseNow[i].y = nxt.y;
           }
         }
       }

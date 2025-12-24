@@ -69,6 +69,7 @@ function generateDefense(cov: Coverage, offense: Player[]): Player[] {
   const nickelX = slot ? slot.x * 0.85 + 0.5 * 0.15 : 0.62;
   const lbToTeX = te ? te.x : 0.52;
   const lbToRbX = rb ? rb.x * 0.7 + 0.5 * 0.3 : 0.48;
+  const strong = strongSide(offense);
 
   const cornerY = losY + rand(0.04, 0.15);
   const lbY = losY + rand(0.11, 0.16);
@@ -95,7 +96,8 @@ function generateDefense(cov: Coverage, offense: Player[]): Player[] {
     S2.x = 0.65; S2.y = losY + 0.40;
   } else if (cov === "COVER_3") {
     S1.x = 0.50; S1.y = losY + 0.42;
-    S2.x = jitter(0.60, 0.07); S2.y = losY + 0.20;
+    S2.x = strong === "RIGHT" ? jitter(0.30, 0.04) : jitter(0.70, 0.04);
+    S2.y = losY + 0.20;
   } else if (cov === "QUARTERS") {
     S1.x = 0.32; S1.y = losY + 0.38;
     S2.x = 0.68; S2.y = losY + 0.38;
