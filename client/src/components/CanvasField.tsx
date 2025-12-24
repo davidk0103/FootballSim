@@ -447,8 +447,9 @@ export default function CanvasField({
 
           if (coverage === "COVER_1") {
             const rid = assign[d.id];
-            const wr = rid ? offenseNow.find((p) => p.id === rid) : undefined;
-            if (wr) {
+            if (rid) {
+              const wr = offenseNow.find((p) => p.id === rid);
+              if (!wr) continue;
               const speed = speedPerSecond[d.id] ?? baseSpeed;
               const step = speed * frameDt * (d.id === "N" ? 0.78 : 0.82); // nickel trails slightly but with CB speed
               const prevLev = manLeverageRef.current[rid] ?? 0;
