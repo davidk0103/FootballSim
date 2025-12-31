@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   Coverage,
   OffensePosition,
@@ -234,9 +234,32 @@ export default function CanvasField({
   const onResultRef = useRef(onResult);
   const nickelLeftRef = useRef(false);
   const manLeverageRef = useRef<Record<string, number>>({});
+  const lastUiSyncRef = useRef(0);
+  const isScrubbingRef = useRef(false);
+
+  const [simTime, setSimTime] = useState(0);
+  const [timeline, setTimeline] = useState({ throwAt: 0, end: 0 });
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   const offenseColor = useMemo(() => "#1f2937", []); // dark gray
   const alignedDefense = useMemo(() => alignDefense(defense, offense), [defense, offense]);
+
+  const handleScrubStart = () => {
+    setIsScrubbing(true);
+    isScrubbingRef.current = true;
+  };
+
+  const handleScrubEnd = () => {
+    setIsScrubbing(false);
+    isScrubbingRef.current = false;
+  };
+
+  const handleScrubChange = (value: number) => {
+    const end = timeline.end || 0;
+    const clamped = Math.max(0, Math.min(end, value));
+    simTimeRef.current = clamped;
+    setSimTime(clamped);
+  };
 
   useEffect(() => {
     // reset defense state when inputs change
@@ -301,6 +324,7 @@ export default function CanvasField({
       throwAt = Math.max(tSnap, routeTravelTime * anticipationFactor);
     }
     const tEnd = throwAt + 0.8; // throw + landing buffer
+    setTimeline({ throwAt, end: tEnd });
 
     const drawFrame = (simT: number, dt: number) => {
       // ---------- Background ----------
@@ -574,9 +598,11 @@ export default function CanvasField({
 
       // ---------- Ball position ----------
       const qb = offenseNow.find((p) => p.id === "QB")!;
+      const targetP = offenseNow.find((p) => p.id === target);
       const center: Pt = { x: 0.5, y: losY }; // "snap point" center of LOS
 
       let ball: Pt = center;
+      let throwVisual: { start: Pt; end: Pt; u: number; tFlight: number } | null = null;
 
       if (simT <= tSnap) {
         // snap to QB
@@ -587,7 +613,6 @@ export default function CanvasField({
         ball = { x: qb.x, y: qb.y };
       } else {
         // throw
-        const targetP = offenseNow.find((p) => p.id === target);
         if (targetP) {
           const start: Pt = { x: qb.x, y: qb.y };
           const end: Pt = { x: targetP.x, y: targetP.y };
@@ -595,10 +620,26 @@ export default function CanvasField({
           const d = dist(start, end);
           const tFlight = Math.max(0.25, Math.min(0.65, d * 0.9));
           const u = Math.min(1, (simT - throwAt) / tFlight);
+          throwVisual = { start, end, u, tFlight };
 
           ball = { x: start.x + (end.x - start.x) * u, y: start.y + (end.y - start.y) * u };
         } else {
           ball = { x: qb.x, y: qb.y };
+        }
+      }
+
+      // ---------- Catch window halo grows as the ball arrives ----------
+      if (throwVisual && targetP) {
+        const { end, u } = throwVisual;
+        const catchHalo = Math.max(0, Math.min(1, (u - 0.4) * 1.4));
+        if (catchHalo > 0) {
+          const tx = toPxX(end.x, width);
+          const ty = toPxY(end.y, height);
+          ctx.strokeStyle = `rgba(250, 204, 21, ${0.25 + catchHalo * 0.35})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 26 + catchHalo * 12, 0, Math.PI * 2);
+          ctx.stroke();
         }
       }
 
@@ -685,7 +726,7 @@ export default function CanvasField({
       const dt = (ts - lastTsRef.current) / 1000;
       lastTsRef.current = ts;
 
-      if (isPlayingRef.current) {
+      if (isPlayingRef.current && !isScrubbingRef.current) {
         simTimeRef.current += dt * speedRef.current;
         if (simTimeRef.current > tEnd) {
           simTimeRef.current = tEnd;
@@ -694,11 +735,17 @@ export default function CanvasField({
       }
 
       drawFrame(simTimeRef.current, dt);
+      if (!isScrubbingRef.current && ts - lastUiSyncRef.current > 33) {
+        setSimTime(simTimeRef.current);
+        lastUiSyncRef.current = ts;
+      }
       rafRef.current = requestAnimationFrame(loop);
     };
 
     simTimeRef.current = 0;
     lastTsRef.current = null;
+    lastUiSyncRef.current = 0;
+    setSimTime(0);
     rafRef.current = requestAnimationFrame(loop);
 
     return () => {
@@ -708,5 +755,28 @@ export default function CanvasField({
     };
   }, [width, height, offense, routes, defense, coverage, target, tThrow]);
 
-  return <canvas ref={canvasRef} />;
+  const showScrubber = timeline.end > 0;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: width }}>
+      {showScrubber && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 2px 6px" }}>
+          <input
+            type="range"
+            min={0}
+            max={timeline.end}
+            step={0.01}
+            value={Math.min(simTime, timeline.end)}
+            onMouseDown={handleScrubStart}
+            onTouchStart={handleScrubStart}
+            onMouseUp={handleScrubEnd}
+            onTouchEnd={handleScrubEnd}
+            onChange={(e) => handleScrubChange(Number(e.target.value))}
+            style={{ flex: 1 }}
+          />
+        </div>
+      )}
+      <canvas ref={canvasRef} />
+    </div>
+  );
 }

@@ -247,112 +247,142 @@ export default function App() {
       </div>
 
       <div className="controls">
-        <div className="control-stack">
-          <label htmlFor="formation">Formation</label>
-          <select
-            id="formation"
-            value={formation}
-            onChange={(e) => setFormation(e.target.value as Formation)}
-          >
-            <option value="TRIPS_RIGHT">Trips Right</option>
-            <option value="DOUBLES_2x2">Doubles 2x2</option>
-            <option value="BUNCH_LEFT">Bunch Left</option>
-          </select>
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Routes</div>
-
-          {eligibleReceivers(offense).map((rid) => {
-            const current = routes.find((r) => r.receiverId === rid)?.route ?? "HITCH";
-
-            return (
-              <div key={rid} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                <div style={{ width: 36 }}>{rid}</div>
-                <select
-                  value={current}
-                  onChange={(e) => {
-                    const next = e.target.value as RouteType;
-                    setRoutes((prev) => {
-                      const copy = [...prev];
-                      const idx = copy.findIndex((r) => r.receiverId === rid);
-                      if (idx >= 0) copy[idx] = { receiverId: rid, route: next };
-                      else copy.push({ receiverId: rid, route: next });
-                      return copy;
-                    });
-                  }}
-                  style={{ padding: 8, width: 160 }}
-                >
-                  {ROUTES.map((rt) => (
-                    <option key={rt} value={rt}>
-                      {rt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={() => setIsPlaying((p) => !p)} style={{ padding: "8px 12px" }}>
-            {isPlaying ? "Pause" : "Play"}
-          </button>
-
-          <button
-            onClick={() => {
-              setIsPlaying(false);
-              setCanvasKey((k) => k + 1); // force remount to reset
-            }}
-            style={{ padding: "8px 12px" }}
-          >
-            Reset
-          </button>
-
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            Speed
-            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
-              <option value={0.5}>0.5x</option>
-              <option value={1}>1x</option>
-              <option value={2}>2x</option>
-            </select>
-          </label>
-
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            Target
-            <select value={target} onChange={(e) => setTarget(e.target.value as TargetPosition)}>
-              <option value="WR1">WR1</option>
-              <option value="WR2">WR2</option>
-              <option value="WR3">WR3</option>
-              <option value="TE">TE</option>
-              <option value="RB">RB</option>
-            </select>
-          </label>
-
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            Coverage
-            <select value={coverage} onChange={(e) => setCoverage(e.target.value as Coverage)}>
-              <option value="COVER_1">Cover 1</option>
-              <option value="COVER_2">Cover 2</option>
-              <option value="COVER_3">Cover 3</option>
-              <option value="QUARTERS">Quarters</option>
-            </select>
-          </label>
-
-          <button
-            onClick={() => {
-              setDefense(generateDefense(coverage, offense));
-              setPlayResult(null);
-            }}
-            style={{ padding: "8px 12px" }}
-          >
-            New Defense
-          </button>
-        </div>
-        <span className="hint">Visualizer above; pick a formation/routes and hit Play.</span>
-        {playResult && (
-          <div style={{ marginTop: 12, fontWeight: 700 }}>
-            Result: {playResult}
+        <div className="control-card">
+          <div className="card-top">
+            <div>
+              <div className="eyebrow">Play setup</div>
+              <div className="card-title">Route Lab</div>
+            </div>
+            <span className="badge">{coverage.replace("_", " ")}</span>
           </div>
-        )}
+          <div className="setup-grid">
+            <label className="control-field">
+              <span>Formation</span>
+              <select
+                value={formation}
+                onChange={(e) => setFormation(e.target.value as Formation)}
+              >
+                <option value="TRIPS_RIGHT">Trips Right</option>
+                <option value="DOUBLES_2x2">Doubles 2x2</option>
+                <option value="BUNCH_LEFT">Bunch Left</option>
+              </select>
+            </label>
+
+            <label className="control-field">
+              <span>Target</span>
+              <select value={target} onChange={(e) => setTarget(e.target.value as TargetPosition)}>
+                <option value="WR1">WR1</option>
+                <option value="WR2">WR2</option>
+                <option value="WR3">WR3</option>
+                <option value="TE">TE</option>
+                <option value="RB">RB</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="pill-row">
+            <span className="pill-label">Coverage</span>
+            <div className="pill-group">
+              {["COVER_1", "COVER_2", "COVER_3", "QUARTERS"].map((cov) => (
+                <button
+                  key={cov}
+                  className={`pill ${coverage === cov ? "active" : ""}`}
+                  onClick={() => setCoverage(cov as Coverage)}
+                  type="button"
+                >
+                  {cov.replace("_", " ")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pill-row">
+            <span className="pill-label">Speed</span>
+            <div className="pill-group">
+              {[0.5, 1, 2].map((s) => (
+                <button
+                  key={s}
+                  className={`pill ${speed === s ? "active" : ""}`}
+                  onClick={() => setSpeed(s)}
+                  type="button"
+                >
+                  {s}x
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="control-card routes-card">
+          <div className="card-top">
+            <div>
+              <div className="eyebrow">Routes</div>
+              <div className="card-title">Assignments</div>
+            </div>
+            <button
+              className="ghost-button"
+              onClick={() => {
+                setDefense(generateDefense(coverage, offense));
+                setPlayResult(null);
+              }}
+              type="button"
+            >
+              New Defense
+            </button>
+          </div>
+          <div className="routes-grid">
+            {eligibleReceivers(offense).map((rid) => {
+              const current = routes.find((r) => r.receiverId === rid)?.route ?? "HITCH";
+
+              return (
+                <label key={rid} className="route-row">
+                  <span className="route-chip">{rid}</span>
+                  <select
+                    value={current}
+                    onChange={(e) => {
+                      const next = e.target.value as RouteType;
+                      setRoutes((prev) => {
+                        const copy = [...prev];
+                        const idx = copy.findIndex((r) => r.receiverId === rid);
+                        if (idx >= 0) copy[idx] = { receiverId: rid, route: next };
+                        else copy.push({ receiverId: rid, route: next });
+                        return copy;
+                      });
+                    }}
+                  >
+                    {ROUTES.map((rt) => (
+                      <option key={rt} value={rt}>
+                        {rt}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="control-card actions-card">
+          <div className="button-row">
+            <button className="cta" onClick={() => setIsPlaying((p) => !p)} type="button">
+              {isPlaying ? "Pause" : "Play"}
+            </button>
+            <button
+              className="secondary"
+              onClick={() => {
+                setIsPlaying(false);
+                setCanvasKey((k) => k + 1); // force remount to reset
+              }}
+              type="button"
+            >
+              Reset
+            </button>
+          </div>
+          <div className="meta-row">
+            <span className="hint">Pick a formation, tweak routes, then hit Play.</span>
+            {playResult && <span className="result">Result: {playResult}</span>}
+          </div>
+        </div>
       </div>
     </div>
   );
