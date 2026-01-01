@@ -181,13 +181,21 @@ export default function App() {
   const [coverage, setCoverage] = useState<Coverage>("COVER_2");
   const [defense, setDefense] = useState<Player[]>([]);
   const [playResult, setPlayResult] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState({ throwAt: 0, end: 0 });
+  const [simTime, setSimTime] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [playFinished, setPlayFinished] = useState(false);
   const playFinishedRef = useRef(false);
+  const controlsLocked = isPlaying || (!playFinished && simTime > 0);
 
 
   const offense = useMemo(() => offenseForFormation(formation), [formation]);
 
   useEffect(() => {
-    if (isPlaying) playFinishedRef.current = false;
+    if (isPlaying) {
+      playFinishedRef.current = false;
+      setPlayFinished(false);
+    }
   }, [isPlaying]);
 
   // 1) resize observer
@@ -220,7 +228,16 @@ export default function App() {
   useEffect(() => {
     setDefense(generateDefense(coverage, offense));
     setPlayResult(null);
+    setSimTime(0);
+    setPlayFinished(false);
+    playFinishedRef.current = false;
   }, [coverage, offense]);
+
+  const handleScrubChange = (value: number) => {
+    const end = timeline.end || 0;
+    const clamped = Math.max(0, Math.min(end, value));
+    setSimTime(clamped);
+  };
 
   return (
     <div className="app">
@@ -236,10 +253,16 @@ export default function App() {
           isPlaying={isPlaying}
           speed={speed}
           target={target}
+          controlledTime={simTime}
+          onTimeChange={(t) => setSimTime(t)}
+          onTimelineChange={(t) => setTimeline(t)}
+          isScrubbing={isScrubbing}
           onDone={() => {
             if (playFinishedRef.current) return;
             playFinishedRef.current = true;
+            setPlayFinished(true);
             setIsPlaying(false);
+            setSimTime((t) => Math.min(timeline.end || t, t));
             setCanvasKey((k) => k + 1); // force remount to reset defense
           }}
           onResult={(r) => setPlayResult(r)}
@@ -253,14 +276,17 @@ export default function App() {
               <div className="eyebrow">Play setup</div>
               <div className="card-title">Route Lab</div>
             </div>
-            <span className="badge">{coverage.replace("_", " ")}</span>
           </div>
           <div className="setup-grid">
             <label className="control-field">
               <span>Formation</span>
               <select
                 value={formation}
-                onChange={(e) => setFormation(e.target.value as Formation)}
+                disabled={controlsLocked}
+                onChange={(e) => {
+                  if (controlsLocked) return;
+                  setFormation(e.target.value as Formation);
+                }}
               >
                 <option value="TRIPS_RIGHT">Trips Right</option>
                 <option value="DOUBLES_2x2">Doubles 2x2</option>
@@ -270,7 +296,14 @@ export default function App() {
 
             <label className="control-field">
               <span>Target</span>
-              <select value={target} onChange={(e) => setTarget(e.target.value as TargetPosition)}>
+              <select
+                value={target}
+                disabled={controlsLocked}
+                onChange={(e) => {
+                  if (controlsLocked) return;
+                  setTarget(e.target.value as TargetPosition);
+                }}
+              >
                 <option value="WR1">WR1</option>
                 <option value="WR2">WR2</option>
                 <option value="WR3">WR3</option>
@@ -287,7 +320,11 @@ export default function App() {
                 <button
                   key={cov}
                   className={`pill ${coverage === cov ? "active" : ""}`}
-                  onClick={() => setCoverage(cov as Coverage)}
+                  disabled={controlsLocked}
+                  onClick={() => {
+                    if (controlsLocked) return;
+                    setCoverage(cov as Coverage);
+                  }}
                   type="button"
                 >
                   {cov.replace("_", " ")}
@@ -303,7 +340,11 @@ export default function App() {
                 <button
                   key={s}
                   className={`pill ${speed === s ? "active" : ""}`}
-                  onClick={() => setSpeed(s)}
+                  disabled={controlsLocked}
+                  onClick={() => {
+                    if (controlsLocked) return;
+                    setSpeed(s);
+                  }}
                   type="button"
                 >
                   {s}x
@@ -321,7 +362,9 @@ export default function App() {
             </div>
             <button
               className="ghost-button"
+              disabled={controlsLocked}
               onClick={() => {
+                if (controlsLocked) return;
                 setDefense(generateDefense(coverage, offense));
                 setPlayResult(null);
               }}
@@ -339,7 +382,9 @@ export default function App() {
                   <span className="route-chip">{rid}</span>
                   <select
                     value={current}
+                    disabled={controlsLocked}
                     onChange={(e) => {
+                      if (controlsLocked) return;
                       const next = e.target.value as RouteType;
                       setRoutes((prev) => {
                         const copy = [...prev];
@@ -364,19 +409,57 @@ export default function App() {
 
         <div className="control-card actions-card">
           <div className="button-row">
-            <button className="cta" onClick={() => setIsPlaying((p) => !p)} type="button">
+            <button
+              className="cta"
+              onClick={() => {
+                if (playFinishedRef.current || playFinished) {
+                  playFinishedRef.current = false;
+                  setPlayFinished(false);
+                  setSimTime(0);
+                  setCanvasKey((k) => k + 1); // reset animation state
+                  setIsPlaying(true);
+                  return;
+                }
+                setIsPlaying((p) => !p);
+              }}
+              type="button"
+            >
               {isPlaying ? "Pause" : "Play"}
             </button>
             <button
               className="secondary"
               onClick={() => {
                 setIsPlaying(false);
+                setIsScrubbing(false);
+                setSimTime(0);
+                setPlayFinished(false);
+                playFinishedRef.current = false;
                 setCanvasKey((k) => k + 1); // force remount to reset
               }}
               type="button"
             >
               Reset
             </button>
+          </div>
+          <div className="scrubber-row">
+            <input
+              type="range"
+              min={0}
+              max={timeline.end || 1}
+              step={0.01}
+              value={Math.min(simTime, timeline.end || 1)}
+              onMouseDown={() => {
+                setIsScrubbing(true);
+                setIsPlaying(false);
+              }}
+              onTouchStart={() => {
+                setIsScrubbing(true);
+                setIsPlaying(false);
+              }}
+              onMouseUp={() => setIsScrubbing(false)}
+              onTouchEnd={() => setIsScrubbing(false)}
+              onChange={(e) => handleScrubChange(Number(e.target.value))}
+            />
           </div>
           <div className="meta-row">
             <span className="hint">Pick a formation, tweak routes, then hit Play.</span>

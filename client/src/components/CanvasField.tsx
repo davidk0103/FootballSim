@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type {
   Coverage,
   OffensePosition,
@@ -21,6 +21,10 @@ type Props = {
   tThrow?: number; // seconds (optional override)
   onResult?: (r: PlayResult) => void;
   onDone?: () => void;
+  controlledTime?: number;
+  onTimeChange?: (t: number) => void;
+  onTimelineChange?: (timeline: { throwAt: number; end: number }) => void;
+  isScrubbing?: boolean;
 };
 
 type Pt = { x: number; y: number };
@@ -221,6 +225,10 @@ export default function CanvasField({
   tThrow,
   onResult,
   onDone,
+  controlledTime,
+  onTimeChange,
+  onTimelineChange,
+  isScrubbing = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const simTimeRef = useRef(0);
@@ -237,29 +245,8 @@ export default function CanvasField({
   const lastUiSyncRef = useRef(0);
   const isScrubbingRef = useRef(false);
 
-  const [simTime, setSimTime] = useState(0);
-  const [timeline, setTimeline] = useState({ throwAt: 0, end: 0 });
-  const [isScrubbing, setIsScrubbing] = useState(false);
-
   const offenseColor = useMemo(() => "#1f2937", []); // dark gray
   const alignedDefense = useMemo(() => alignDefense(defense, offense), [defense, offense]);
-
-  const handleScrubStart = () => {
-    setIsScrubbing(true);
-    isScrubbingRef.current = true;
-  };
-
-  const handleScrubEnd = () => {
-    setIsScrubbing(false);
-    isScrubbingRef.current = false;
-  };
-
-  const handleScrubChange = (value: number) => {
-    const end = timeline.end || 0;
-    const clamped = Math.max(0, Math.min(end, value));
-    simTimeRef.current = clamped;
-    setSimTime(clamped);
-  };
 
   useEffect(() => {
     // reset defense state when inputs change
@@ -288,6 +275,15 @@ export default function CanvasField({
     nickelLeftRef.current = !!(wr2 && wr2.x < 0.5);
     manLeverageRef.current = {}; // reset leverage memory when offense changes
   }, [offense]);
+
+  useEffect(() => {
+    isScrubbingRef.current = isScrubbing;
+  }, [isScrubbing]);
+
+  useEffect(() => {
+    if (controlledTime == null) return;
+    simTimeRef.current = controlledTime;
+  }, [controlledTime]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -324,7 +320,7 @@ export default function CanvasField({
       throwAt = Math.max(tSnap, routeTravelTime * anticipationFactor);
     }
     const tEnd = throwAt + 0.8; // throw + landing buffer
-    setTimeline({ throwAt, end: tEnd });
+    onTimelineChange?.({ throwAt, end: tEnd });
 
     const drawFrame = (simT: number, dt: number) => {
       // ---------- Background ----------
@@ -736,16 +732,16 @@ export default function CanvasField({
 
       drawFrame(simTimeRef.current, dt);
       if (!isScrubbingRef.current && ts - lastUiSyncRef.current > 33) {
-        setSimTime(simTimeRef.current);
+        onTimeChange?.(simTimeRef.current);
         lastUiSyncRef.current = ts;
       }
       rafRef.current = requestAnimationFrame(loop);
     };
 
-    simTimeRef.current = 0;
+    simTimeRef.current = controlledTime ?? 0;
     lastTsRef.current = null;
     lastUiSyncRef.current = 0;
-    setSimTime(0);
+    onTimeChange?.(simTimeRef.current);
     rafRef.current = requestAnimationFrame(loop);
 
     return () => {
@@ -755,28 +751,5 @@ export default function CanvasField({
     };
   }, [width, height, offense, routes, defense, coverage, target, tThrow]);
 
-  const showScrubber = timeline.end > 0;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: width }}>
-      {showScrubber && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 2px 6px" }}>
-          <input
-            type="range"
-            min={0}
-            max={timeline.end}
-            step={0.01}
-            value={Math.min(simTime, timeline.end)}
-            onMouseDown={handleScrubStart}
-            onTouchStart={handleScrubStart}
-            onMouseUp={handleScrubEnd}
-            onTouchEnd={handleScrubEnd}
-            onChange={(e) => handleScrubChange(Number(e.target.value))}
-            style={{ flex: 1 }}
-          />
-        </div>
-      )}
-      <canvas ref={canvasRef} />
-    </div>
-  );
+  return <canvas ref={canvasRef} />;
 }

@@ -11,6 +11,7 @@
 .field-shell {
   flex: 1;
   min-height: 320px;
+  max-height: calc(100vh - 240px);
   background: #ffffff;
   border-radius: 16px;
   box-shadow:
@@ -22,6 +23,7 @@
   justify-content: center;
   min-height: 420px;
   margin-bottom: 12px;
+  overflow: hidden;
 }
 
 .field-shell canvas {
@@ -32,20 +34,20 @@
 .controls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .control-card {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.95));
   border: 1px solid #e2e8f0;
   border-radius: 14px;
-  padding: 14px 16px;
+  padding: 10px 12px;
   box-shadow:
     0 12px 28px rgba(15, 23, 42, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .routes-card {
@@ -110,6 +112,17 @@
   font-weight: 600;
   color: #0f172a;
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.control-field select:disabled {
+  color: #6b7280;
+  -webkit-text-fill-color: #6b7280; /* keep text tone consistent when locked */
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7);
+  opacity: 1;
+  cursor: not-allowed;
 }
 
 .pill-row {
@@ -151,6 +164,13 @@
   background: linear-gradient(120deg, #2563eb, #06b6d4);
   color: #f8fafc;
   border-color: transparent;
+}
+
+.pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .routes-grid {
@@ -203,6 +223,15 @@
   background: rgba(34, 197, 94, 0.18);
 }
 
+.ghost-button:disabled,
+.secondary:disabled,
+.cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
 .button-row {
   display: flex;
   gap: 10px;
@@ -237,6 +266,15 @@
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.scrubber-row {
+  width: 100%;
+  padding: 6px 0 4px;
+}
+
+.scrubber-row input {
+  width: 100%;
 }
 
 .hint {
